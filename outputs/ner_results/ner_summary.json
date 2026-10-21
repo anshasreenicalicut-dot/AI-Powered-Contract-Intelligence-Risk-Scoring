@@ -1,0 +1,16 @@
+{
+  "model": "en_core_web_sm",
+  "documents_processed": 510,
+  "entities_extracted": 185565,
+  "counts_by_label": {
+    "DATE": 25006,
+    "MONEY": 2797,
+    "ORG": 157762
+  },
+  "entity_types": [
+    "DATE",
+    "MONEY",
+    "ORG"
+  ],
+  "note": "Pretrained baseline; validate entity predictions."
+}
