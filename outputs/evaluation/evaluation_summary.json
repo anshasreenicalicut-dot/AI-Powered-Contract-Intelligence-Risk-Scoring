@@ -1,0 +1,48 @@
+{
+  "test_examples": 575,
+  "accuracy_before_threshold": 0.4365217391304348,
+  "threshold": 0.5,
+  "accepted_predictions": 575,
+  "rejected_low_confidence": 0,
+  "coverage": 1.0,
+  "classification_report": {
+    "Highlight the parts (if any) of this contract related to \"Agreement Date\" that should be reviewed by a lawyer. Details: The date of the contract": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 111.0
+    },
+    "Highlight the parts (if any) of this contract related to \"Document Name\" that should be reviewed by a lawyer. Details: The name of the contract": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 113.0
+    },
+    "Highlight the parts (if any) of this contract related to \"Effective Date\" that should be reviewed by a lawyer. Details: The date when the contract is effective": {
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1-score": 0.0,
+      "support": 100.0
+    },
+    "Highlight the parts (if any) of this contract related to \"Parties\" that should be reviewed by a lawyer. Details: The two or more parties who signed the contract": {
+      "precision": 0.4365217391304348,
+      "recall": 1.0,
+      "f1-score": 0.6077481840193705,
+      "support": 251.0
+    },
+    "accuracy": 0.4365217391304348,
+    "macro avg": {
+      "precision": 0.1091304347826087,
+      "recall": 0.25,
+      "f1-score": 0.15193704600484262,
+      "support": 575.0
+    },
+    "weighted avg": {
+      "precision": 0.19055122873345937,
+      "recall": 0.4365217391304348,
+      "f1-score": 0.2652952942414991,
+      "support": 575.0
+    }
+  },
+  "note": "Raw classification metrics are reported before threshold rejection. Select threshold on validation data, not test data."
+}
