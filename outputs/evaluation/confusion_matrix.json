@@ -1,0 +1,34 @@
+{
+  "labels": [
+    "Highlight the parts (if any) of this contract related to \"Agreement Date\" that should be reviewed by a lawyer. Details: The date of the contract",
+    "Highlight the parts (if any) of this contract related to \"Document Name\" that should be reviewed by a lawyer. Details: The name of the contract",
+    "Highlight the parts (if any) of this contract related to \"Effective Date\" that should be reviewed by a lawyer. Details: The date when the contract is effective",
+    "Highlight the parts (if any) of this contract related to \"Parties\" that should be reviewed by a lawyer. Details: The two or more parties who signed the contract"
+  ],
+  "matrix": [
+    [
+      0,
+      0,
+      0,
+      111
+    ],
+    [
+      0,
+      0,
+      0,
+      113
+    ],
+    [
+      0,
+      0,
+      0,
+      100
+    ],
+    [
+      0,
+      0,
+      0,
+      251
+    ]
+  ]
+}
