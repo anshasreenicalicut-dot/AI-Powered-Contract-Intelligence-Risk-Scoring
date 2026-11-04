@@ -1,0 +1,50 @@
+{
+  "dataset": ".\\data\\week2\\validation.jsonl",
+  "examples": 574,
+  "accuracy": 0.47909407665505227,
+  "macro_precision": 0.1206140350877193,
+  "macro_recall": 0.24909420289855072,
+  "macro_f1": 0.16252955082742318,
+  "threshold_results": [
+    {
+      "threshold": 0.3,
+      "accepted": 8,
+      "review_required": 566,
+      "coverage": 0.013937282229965157,
+      "accepted_accuracy": 0.625,
+      "accepted_macro_precision": 0.15625,
+      "accepted_macro_recall": 0.25,
+      "accepted_macro_f1": 0.19230769230769232
+    },
+    {
+      "threshold": 0.4,
+      "accepted": 5,
+      "review_required": 569,
+      "coverage": 0.008710801393728223,
+      "accepted_accuracy": 0.8,
+      "accepted_macro_precision": 0.2,
+      "accepted_macro_recall": 0.25,
+      "accepted_macro_f1": 0.2222222222222222
+    },
+    {
+      "threshold": 0.5,
+      "accepted": 5,
+      "review_required": 569,
+      "coverage": 0.008710801393728223,
+      "accepted_accuracy": 0.8,
+      "accepted_macro_precision": 0.2,
+      "accepted_macro_recall": 0.25,
+      "accepted_macro_f1": 0.2222222222222222
+    },
+    {
+      "threshold": 0.6,
+      "accepted": 5,
+      "review_required": 569,
+      "coverage": 0.008710801393728223,
+      "accepted_accuracy": 0.8,
+      "accepted_macro_precision": 0.2,
+      "accepted_macro_recall": 0.25,
+      "accepted_macro_f1": 0.2222222222222222
+    }
+  ]
+}
