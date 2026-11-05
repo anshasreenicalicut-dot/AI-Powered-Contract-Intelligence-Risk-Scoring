@@ -1,0 +1,2 @@
+﻿threshold,accepted,review_required,coverage,accepted_accuracy,accepted_macro_precision,accepted_macro_recall,accepted_macro_f1
+0.6,0,575,0.0,0.0,0.0,0.0,0.0

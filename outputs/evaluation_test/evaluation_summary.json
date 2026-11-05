@@ -1,0 +1,20 @@
+{
+  "dataset": ".\\data\\week2\\test.jsonl",
+  "examples": 575,
+  "accuracy": 0.4365217391304348,
+  "macro_precision": 0.1091304347826087,
+  "macro_recall": 0.25,
+  "macro_f1": 0.15193704600484262,
+  "threshold_results": [
+    {
+      "threshold": 0.6,
+      "accepted": 0,
+      "review_required": 575,
+      "coverage": 0.0,
+      "accepted_accuracy": 0.0,
+      "accepted_macro_precision": 0.0,
+      "accepted_macro_recall": 0.0,
+      "accepted_macro_f1": 0.0
+    }
+  ]
+}
