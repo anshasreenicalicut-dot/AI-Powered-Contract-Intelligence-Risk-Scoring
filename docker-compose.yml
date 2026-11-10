@@ -1,0 +1,17 @@
+
+services:
+  cuad-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: cuad-contract-api
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./uploads:/app/uploads
+      - ./outputs:/app/outputs
+
+    restart: unless-stopped
