@@ -1,211 +1,715 @@
 # AI-Powered-Contract-Intelligence-Risk-Scoring
 
-## Project Overview
+An AI-powered legal document analysis and retrieval system built using the **Contract Understanding Atticus Dataset (CUAD)**. The project combines Natural Language Processing (NLP), Transformer-based Question Answering, Named Entity Recognition (NER), semantic search, vector databases and REST API development to help users analyze legal contracts.
 
-The **CUAD Legal Contract Clause Classification** project uses Natural Language Processing (NLP) and transformer-based deep learning to analyze legal contract text and predict the category of a clause.
+---
 
-The project uses the **Contract Understanding Atticus Dataset (CUAD)**, a dataset developed for identifying and understanding important clauses in legal contracts. It includes data preparation, text preprocessing, model training, evaluation, and prediction.
+## 1. Project Overview
 
-The trained model can accept a contract clause as input and return a predicted category with a confidence score.
+Legal contracts contain important information about parties, termination conditions, payment obligations, intellectual property rights, confidentiality and other legal clauses. Manually reviewing large numbers of contracts can be time-consuming.
 
-## Objectives
+The CUAD Legal Contract Intelligence System aims to simplify this process through machine learning and NLP.
 
-- Process and prepare legal contract data.
-- Preprocess contract text for NLP.
-- Fine-tune a transformer-based text classification model.
-- Predict potential contract clause categories.
-- Evaluate model performance using standard classification metrics.
-- Build a reusable prediction pipeline for legal text analysis.
+The system supports:
 
-## Technologies Used
+- Legal contract dataset preparation and preprocessing.
+- PDF and DOCX document ingestion.
+- PDF text extraction and OCR for scanned documents.
+- Transformer-based extractive Question Answering.
+- Named Entity Recognition for organizations, dates and monetary values.
+- Sentence Transformer-based text embeddings.
+- ChromaDB vector storage.
+- Semantic search across contract passages.
+- FastAPI-based backend services.
+- Streamlit-based user interface.
+- Docker-based deployment.
 
-- **Programming Language:** Python
-- **IDE:** Visual Studio Code
-- **NLP / Deep Learning:** Hugging Face Transformers, PyTorch
-- **Dataset Processing:** Hugging Face Datasets, Pandas
-- **Evaluation:** Scikit-learn
-- **Dataset:** Contract Understanding Atticus Dataset (CUAD)
-- **Version Control:** Git and GitHub
+## 2. Project Objectives
 
-## Project Structure
+1. Process and prepare the CUAD dataset for machine learning.
+2. Develop a baseline NLP pipeline for legal entity extraction.
+3. Train a DistilBERT-based Question Answering model.
+4. Extract text from digital and scanned PDF documents.
+5. Convert contract text into numerical embeddings.
+6. Store and retrieve contract passages using ChromaDB.
+7. Develop REST APIs for contract upload, search and metadata retrieval.
+8. Build an interactive Streamlit frontend.
+9. Containerize the application using Docker.
+
+## 3. Dataset
+
+**Dataset:** Contract Understanding Atticus Dataset (CUAD)
+
+The CUAD dataset contains legal contracts with expert annotations covering important contractual provisions.
+
+Dataset information:
+
+| Attribute | Details |
+|---|---|
+| Dataset | CUAD |
+| Number of contracts | 510 |
+| Processed examples | 47,542 |
+| Data format | JSON / JSONL |
+| Main application | Legal contract understanding |
+| Model task | Extractive Question Answering |
+
+The processed data is organized into training, validation and testing datasets.
+
+### Dataset processing
+
+The preprocessing pipeline includes:
+
+1. Loading the original CUAD JSON files.
+2. Extracting contract titles and paragraphs.
+3. Processing questions and annotated answers.
+4. Preparing training-ready JSONL records.
+5. Splitting the data into training, validation and testing sets.
+6. Saving processed data for model training and evaluation.
+
+The QA dataset is split at the contract level to avoid placing the same contract in both training and validation datasets.
+
+## 4. Technologies Used
+
+| Technology | Purpose |
+|---|---|
+| Python | Main programming language |
+| PyTorch | Deep learning framework |
+| Hugging Face Transformers | DistilBERT Question Answering |
+| spaCy | Named Entity Recognition |
+| Sentence Transformers | Text embeddings |
+| ChromaDB | Vector database |
+| FastAPI | Backend API |
+| Streamlit | Frontend application |
+| PyMuPDF | PDF text extraction |
+| PyPDF | PDF processing |
+| Tesseract OCR | Scanned document text recognition |
+| pdf2image | PDF page-to-image conversion |
+| Pandas | Data processing |
+| Scikit-learn | Data preparation and evaluation |
+| Docker | Application containerization |
+
+## 5. Project Architecture
+
+The application is organized into four main development stages.
+
+### Week 1 – Data Parsing and Baseline Modeling
+
+- CUAD dataset collection and inspection.
+- JSON and JSONL data preparation.
+- PDF text extraction.
+- Tesseract-based OCR pipeline.
+- Baseline spaCy NER development.
+
+### Week 2 – Transformer-Based Question Answering
+
+- DistilBERT model preparation.
+- Tokenization and answer-span alignment.
+- Handling answerable and unanswerable questions.
+- Model training and validation.
+- Evaluation using Exact Match and token-level F1.
+
+### Week 3 – Embeddings and Semantic Search
+
+- Sentence Transformer integration.
+- 384-dimensional text embeddings using `all-MiniLM-L6-v2`.
+- Contract chunking.
+- ChromaDB vector storage.
+- Similarity-based semantic retrieval.
+- FastAPI backend development.
+
+### Week 4 – Application and Deployment
+
+- Streamlit frontend development.
+- FastAPI and frontend integration.
+- Dockerfile and Docker Compose configuration.
+- Application testing and documentation.
+
+## 6. Project Structure
 
 ```text
 CUAD/
+│
+├── cuad_download/
+│   ├── CUADv1.json
+│   ├── train_separate_questions.json
+│   └── test.json
+│
 ├── data/
 │   ├── pdfs/
 │   ├── processed/
-│   │   ├── cuad_examples.jsonl
 │   │   ├── contracts.jsonl
+│   │   ├── cuad_examples.jsonl
 │   │   └── cuad_summary.json
+│   │
+│   ├── qa/
+│   │   ├── train.jsonl
+│   │   ├── validation.jsonl
+│   │   ├── test.jsonl
+│   │   └── summary.json
+│   │
+│   ├── vector_db/
 │   └── week2/
-│       ├── train.jsonl
-│       ├── validation.jsonl
-│       └── test.jsonl
+│
 ├── models/
-│   └── cuad_clause_classifier/
-├── src/
-│   ├── prepare_data.py
-│   ├── pdf_processor.py
-│   ├── ner_pipeline.py
-│   ├── prepare_week2_data.py
-│   ├── train_transformer.py
-│   ├── evaluate_model.py
-│   └── predict_clause.py
+│   ├── cuad_qa_v1/
+│   ├── cuad_clause_classifier/
+│   └── cuad_ner/
+│
 ├── outputs/
+│   ├── api_results/
+│   ├── evaluation/
+│   ├── evaluation_test/
+│   ├── evaluation_validation/
+│   ├── extracted_text/
+│   ├── ner_results/
+│   └── qa_evaluation/
+│
+├── src/
+│   ├── api/
+│   │   └── main.py
+│   │
+│   ├── vector/
+│   │   ├── embeddings.py
+│   │   └── vector_store.py
+│   │
+│   ├── ner_pipeline.py
+│   ├── pdf_processor.py
+│   ├── pdf_processor_ocr.py
+│   ├── prepare_data.py
+│   ├── prepare_qa_data.py
+│   ├── train_qa.py
+│   ├── train_transformer.py
+│   ├── evaluate_qa.py
+│   └── predict_clause.py
+│
+├── uploads/
+│
+├── app.py
+├── Dockerfile
+├── docker-compose.yml
+├── .dockerignore
 ├── requirements.txt
-├── .gitignore
 └── README.md
 ```
 
-*Note: Some folders and generated files are created only after running the relevant scripts. File names may vary depending on your project configuration.*
+*Note: This is a logical project structure based on the developed modules. Some folders and model artifacts are generated during execution. The NER model directory is required only after successful training.*
 
-## Dataset
+## 7. Installation and Environment Setup
 
-This project uses the Contract Understanding Atticus Dataset (CUAD), which contains legal contracts annotated for important contract provisions.
+### Prerequisites
 
-**Dataset resources:**
+- Windows 10 or Windows 11.
+- Python 3.9.
+- Visual Studio Code.
+- Git.
+- Docker Desktop (for container deployment).
+- Tesseract OCR.
+- Poppler (for PDF-to-image conversion).
 
-- CUAD GitHub repository: https://github.com/TheAtticusProject/cuad
-- CUAD dataset page: https://huggingface.co/datasets/theatticusproject/cuad
-
-Follow the dataset's licensing and usage terms when downloading or redistributing its contents.
-
-## Installation and Setup
-
-### 1. Clone the repository
+### Step 1: Clone the repository
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/CUAD.git
+git clone YOUR_GITHUB_REPOSITORY_URL
 cd CUAD
 ```
 
-Replace `YOUR-USERNAME` with your GitHub username.
+Alternatively, open the existing project directory in VS Code.
 
-### 2. Create a virtual environment
-
-Windows PowerShell:
+### Step 2: Create a virtual environment
 
 ```powershell
-python -m venv .venv
+py -3.9 -m venv .venv
+```
+
+### Step 3: Activate the environment
+
+```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-If PowerShell blocks activation, follow your organization's execution policy or use the VS Code Command Prompt terminal to activate the environment.
-
-### 3. Install dependencies
+### Step 4: Install dependencies
 
 ```powershell
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-PyTorch must be installed with a version compatible with your Python environment. If required, install a compatible CPU version using the official PyTorch installation instructions.
-
-## Workflow
-
-### Step 1: Prepare the dataset
-
-Run the data preparation script:
+If Streamlit or Requests is not already included:
 
 ```powershell
-python .\src\prepare_data.py
+pip install streamlit requests
 ```
 
-This step prepares the CUAD annotations and generates processed data files.
+## 8. Week 1 – Data Preparation and OCR
 
-### Step 2: Prepare Week 2 training data
+### Dataset preparation
+
+The CUAD dataset is processed into JSONL format for downstream model training.
+
+Run the appropriate preparation script:
 
 ```powershell
-python .\src\prepare_week2_data.py
+python -m src.prepare_data
 ```
 
-The resulting data is split into training, validation, and test sets. When possible, splitting by contract prevents clauses from the same contract from appearing in multiple sets.
-
-### Step 3: Train the transformer model
+For the Question Answering dataset:
 
 ```powershell
-python .\src\train_transformer.py
+python -m src.prepare_qa_data
 ```
 
-For a small smoke test, if your script supports these arguments:
+The generated files are stored in:
+
+```text
+data/processed/
+data/qa/
+```
+
+### PDF text extraction
+
+Digital PDFs can be processed using PyMuPDF and PyPDF.
+
+### OCR pipeline
+
+The OCR pipeline uses:
+
+- Tesseract OCR for text recognition.
+- pdf2image for converting PDF pages into images.
+- PyMuPDF for extracting existing digital text.
+
+Install the required Python packages:
 
 ```powershell
-python .\src\train_transformer.py --data-dir .\data\week2 --output-dir .\models\cuad_clause_classifier --epochs 1 --batch-size 1 --max-train-samples 100 --cpu
+pip install pytesseract pdf2image Pillow PyMuPDF
 ```
 
-The smoke test checks whether the training pipeline runs; it is not a final model evaluation.
+Install Tesseract OCR and Poppler separately on Windows.
 
-### Step 4: Evaluate the model
+Example Tesseract path:
+
+```text
+C:\Program Files\Tesseract-OCR\tesseract.exe
+```
+
+Example Poppler path:
+
+```text
+C:\poppler\Library\bin
+```
+
+Run the OCR pipeline:
 
 ```powershell
-python .\src\evaluate_model.py
+python -m src.pdf_processor_ocr `
+    --input-dir ".\data\pdfs" `
+    --output-dir ".\outputs\extracted_text" `
+    --tesseract-cmd "C:\Program Files\Tesseract-OCR\tesseract.exe" `
+    --poppler-path "C:\poppler\Library\bin" `
+    --dpi 250
 ```
 
-Check your script's `--help` output if your evaluation script requires a model directory or dataset path.
+The actual executable paths must match the local installation.
 
-### Step 5: Predict a contract clause
+Expected output:
 
-Example:
+```text
+outputs/
+└── extracted_text/
+    ├── contract_name.txt
+    └── contract_name.json
+```
+
+The OCR pipeline should be tested with both digital PDFs and scanned PDFs.
+
+## 9. Week 2 – DistilBERT Question Answering
+
+The project uses the DistilBERT model for extractive Question Answering.
+
+**Pretrained model:** `distilbert/distilbert-base-uncased`
+
+### Model configuration
+
+| Parameter | Value |
+|---|---|
+| Architecture | DistilBERT |
+| Maximum sequence length | 384 |
+| Training epochs | 2 |
+| Batch size | 2 |
+| Training device | CPU |
+| Answer extraction | Start and end token prediction |
+
+### Training
+
+The QA training script is:
+
+```text
+src/train_qa.py
+```
+
+Run:
 
 ```powershell
-python .\src\predict_clause.py --model-dir .\models\cuad_clause_classifier --text "Either party may terminate this agreement by providing thirty days written notice."
+python -m src.train_qa
 ```
 
-Example output:
+The trained model is stored in:
+
+```text
+models/cuad_qa_v1/
+```
+
+### Training results
+
+The recorded training run produced:
+
+| Metric | Result |
+|---|---:|
+| Training loss | 1.2011 |
+| Validation loss | 1.2562 |
+| Training runtime | Approximately 2 hours 27 minutes |
+| Evaluation runtime | Approximately 13 minutes |
+
+These are training and validation losses, not final test accuracy.
+
+### Model evaluation
+
+Run:
+
+```powershell
+python -m src.evaluate_qa
+```
+
+Evaluation includes:
+
+- Exact Match (EM).
+- Token-level F1.
+- Category-wise performance.
+- Answer extraction performance.
+
+Evaluation output:
+
+```text
+outputs/
+└── qa_evaluation/
+    ├── qa_predictions.jsonl
+    └── qa_metrics.json
+```
+
+Final test EM and F1 should be reported from the generated metrics file after evaluation finishes successfully.
+
+## 10. Week 3 – Embeddings and Vector Database
+
+### Sentence Transformers
+
+The project uses:
+
+`sentence-transformers/all-MiniLM-L6-v2`
+
+This model converts text passages into 384-dimensional vector embeddings.
+
+### Embedding generation
+
+The embedding module is:
+
+```text
+src/vector/embeddings.py
+```
+
+The vector store module is:
+
+```text
+src/vector/vector_store.py
+```
+
+### ChromaDB integration
+
+ChromaDB stores contract passage embeddings and supports similarity-based retrieval.
+
+The general workflow is:
+
+1. Extract contract text.
+2. Split text into manageable chunks.
+3. Generate embeddings.
+4. Store vectors and metadata in ChromaDB.
+5. Convert user queries into embeddings.
+6. Retrieve the most relevant contract passages.
+
+The vector database location is:
+
+```text
+data/vector_db/
+```
+
+Actual persistence depends on the configuration in `vector_store.py`.
+
+## 11. Week 3 – FastAPI Backend
+
+FastAPI provides REST API endpoints for contract upload, processing, semantic search and metadata retrieval.
+
+### Start the backend
+
+```powershell
+python -m uvicorn src.api.main:app --reload
+```
+
+Backend URL:
+
+```text
+http://127.0.0.1:8000
+```
+
+Swagger documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### API endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/` | API information |
+| GET | `/health` | Health check |
+| POST | `/upload` | Upload PDF or DOCX contract |
+| GET | `/task/{task_id}` | Retrieve processing status |
+| GET | `/search` | Semantic contract search |
+| GET | `/metadata/{contract_id}` | Retrieve contract metadata |
+
+### Contract upload
+
+The upload endpoint accepts PDF and DOCX files.
+
+Example response:
 
 ```json
 {
-  "text": "Either party may terminate this agreement by providing thirty days written notice.",
-  "predicted_category": "Example predicted category",
-  "confidence": 0.75,
-  "threshold": 0.5,
-  "accepted": true
+    "message": "Contract uploaded successfully",
+    "task_id": "generated-task-id",
+    "contract_id": "generated-contract-id",
+    "status": "queued"
 }
 ```
 
-The values above illustrate the output format only. Actual predictions and confidence scores depend on your trained model.
+The task ID is generated dynamically for every upload.
 
-To require a higher confidence threshold:
+### Processing workflow
 
-```powershell
-python .\src\predict_clause.py --model-dir .\models\cuad_clause_classifier --text "This agreement shall be governed by the laws of California." --threshold 0.7
+```text
+Contract Upload
+      |
+      v
+File Validation
+      |
+      v
+Text Extraction
+      |
+      v
+Text Chunking
+      |
+      v
+Embedding Generation
+      |
+      v
+ChromaDB Storage
+      |
+      v
+Metadata Generation
+      |
+      v
+Processing Completed
 ```
 
-## Model Evaluation
+**Note:** The current API implementation uses PyPDF for PDF text extraction. Scanned PDF OCR requires integration of the OCR pipeline into the upload processing workflow.
 
-The model should be evaluated using:
+The API's `/search` endpoint performs semantic retrieval through the vector store. It should not be confused with DistilBERT extractive Question Answering.
 
-- **Accuracy:** Overall proportion of correct predictions.
-- **Precision:** Proportion of predicted categories that are correct.
-- **Recall:** Proportion of relevant examples correctly identified.
-- **F1 Score:** Harmonic mean of precision and recall.
-- **Confidence threshold:** Minimum confidence used to accept a prediction.
+## 12. Week 4 – Streamlit Frontend
 
-Report the actual evaluation results produced by your script. Do not interpret a successful prediction or training run as proof of high accuracy.
+The Streamlit application provides a graphical interface for interacting with the FastAPI backend.
 
-## Important Dataset Consideration
+Run the application:
 
-CUAD is primarily designed for extractive question answering: identifying relevant text spans in contracts in response to questions about legal provisions.
+```powershell
+python -m streamlit run app.py
+```
 
-Converting CUAD into a conventional clause-classification dataset requires a carefully validated mapping between contract text, questions, answer spans, and category labels. Incorrect mappings can produce misleading predictions and evaluation scores.
+Default application URL:
 
-This project is an educational NLP prototype, not a substitute for review by a qualified legal professional.
+```text
+http://localhost:8501
+```
 
-## Future Enhancements
+### Frontend modules
 
-- Develop a Streamlit or Flask interface for uploading contract files.
-- Extract text directly from PDF documents.
-- Highlight relevant contract passages.
-- Add batch processing for multiple contracts.
-- Export prediction results to CSV or Excel.
-- Improve dataset preparation and validate labels.
-- Add model explainability and more comprehensive evaluation.
+#### Dashboard
 
-## Author
+Displays:
+- Number of uploaded contracts during the current session.
+- API connection status.
+- Main application features.
 
-**Project:** CUAD Legal Contract Clause Classification  
-**Domain:** Natural Language Processing, Deep Learning, Legal AI  
-**Language:** Python
+#### Upload Contract
+
+Allows users to:
+- Upload PDF files.
+- Upload DOCX files.
+- Submit contracts for processing.
+- View generated task IDs and contract IDs.
+- Check processing status.
+
+#### Semantic Search
+
+Allows users to:
+- Enter natural-language search queries.
+- Select the number of results.
+- Retrieve relevant contract passages.
+
+#### Contract Metadata
+
+Allows users to:
+- Enter a contract ID.
+- Retrieve contract metadata.
+- Download metadata in JSON format.
+
+#### API Status
+
+Displays:
+- API connection status.
+- Backend information.
+- Swagger documentation link.
+
+#### About Project
+
+Provides information about the CUAD dataset, technologies and system architecture.
+
+The Streamlit application communicates with FastAPI using HTTP requests.
+
+## 13. Week 4 – Docker Deployment
+
+The project includes:
+
+```text
+Dockerfile
+docker-compose.yml
+.dockerignore
+```
+
+These files are intended to support containerization.
+
+### Prerequisites
+
+Install Docker Desktop and ensure that its Linux container engine is running.
+
+Verify:
+
+```powershell
+docker --version
+docker compose version
+docker info
+```
+
+### Build containers
+
+```powershell
+docker compose build
+```
+
+### Start services
+
+```powershell
+docker compose up -d
+```
+
+### Check running containers
+
+```powershell
+docker compose ps
+```
+
+### View logs
+
+```powershell
+docker compose logs -f
+```
+
+### Stop services
+
+```powershell
+docker compose down
+```
+
+**Important:** Docker deployment is complete only after the image builds successfully, the containers start and the application endpoints are tested. Docker Desktop must be running before these commands are executed.
+
+## 14. Testing and Validation
+
+The following tests should be performed before final submission.
+
+| Test | Expected result |
+|---|---|
+| Dataset preprocessing | JSONL files generated |
+| QA model loading | Trained DistilBERT model loads |
+| QA evaluation | EM and F1 metrics generated |
+| Digital PDF extraction | Text extracted successfully |
+| Scanned PDF OCR | OCR text generated |
+| NER prediction | Organizations, dates and money detected |
+| Embedding generation | 384-dimensional vectors generated |
+| ChromaDB indexing | Contract chunks stored |
+| Semantic search | Relevant passages retrieved |
+| API health | Healthy response |
+| Contract upload | Task and contract IDs returned |
+| Task tracking | Processing status returned |
+| Metadata retrieval | Contract metadata returned |
+| Streamlit frontend | All pages load and API calls work |
+| Docker deployment | Containers build and start successfully |
+
+## 15. Limitations
+
+The following considerations apply to the current implementation:
+
+1. OCR quality depends on PDF resolution, scan quality and document formatting.
+2. NER performance depends on the quality and quantity of annotated training examples.
+3. DistilBERT QA performance must be assessed using final evaluation metrics.
+4. Semantic search retrieves relevant passages but does not independently generate legal conclusions.
+5. The current API task store is in-memory and does not persist task status across server restarts.
+6. The current API does not automatically invoke OCR for scanned PDFs.
+7. The current semantic search endpoint is separate from the trained DistilBERT QA model.
+8. Docker deployment and complete end-to-end integration require successful runtime testing.
+
+This system is intended for research and educational purposes and should not replace professional legal review.
+
+## 16. Future Enhancements
+
+Potential improvements include:
+
+- Integrating OCR directly into the API upload pipeline.
+- Connecting DistilBERT QA to the Streamlit interface.
+- Adding question-based contract analysis.
+- Implementing persistent task tracking.
+- Improving NER performance with more annotated legal documents.
+- Adding authentication and user management.
+- Supporting additional document formats.
+- Improving search ranking and retrieval evaluation.
+- Deploying the application to a cloud environment.
+- Adding downloadable contract analysis reports.
+
+## 17. Project Development Summary
+
+| Week | Development focus |
+|---|---|
+| Week 1 | Data parsing, preprocessing, PDF extraction, OCR and baseline NER |
+| Week 2 | DistilBERT Question Answering model training and evaluation |
+| Week 3 | Text embeddings, ChromaDB and FastAPI |
+| Week 4 | Streamlit frontend, Dockerization, testing and documentation |
+
+## 18. Author
+
+**Project:** CUAD – AI-Powered Legal Contract Intelligence System
+
+**Core technologies:** Python, PyTorch, DistilBERT, spaCy, Sentence Transformers, ChromaDB, FastAPI, Streamlit and Docker.
+
+---
+
+*Developed as an AI/NLP project focused on intelligent legal contract understanding, information extraction and semantic retrieval.*
 
 ## Disclaimer
 
