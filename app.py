@@ -1,17 +1,35 @@
 
 import os
-import time
+import re
+import json
+from io import BytesIO
+from pathlib import Path
+
 import requests
 import streamlit as st
+import fitz
+import pytesseract
 
-# ==========================================
+from PIL import Image
+from docx import Document
+
+
+# ==========================================================
 # CONFIGURATION
-# ==========================================
+# ==========================================================
 
 API_URL = os.getenv(
     "CUAD_API_URL",
     "http://127.0.0.1:8000"
+).rstrip("/")
+
+TESSERACT_PATH = os.getenv(
+    "TESSERACT_CMD",
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 )
+
+if Path(TESSERACT_PATH).exists():
+    pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
 
 st.set_page_config(
     page_title="CUAD Contract Intelligence",
@@ -20,46 +38,64 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ==========================================
+
+# ==========================================================
 # CUSTOM CSS
-# ==========================================
+# ==========================================================
 
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #f4f7fb;
-    }
+.stApp {
+    background-color: #f4f7fb;
+}
 
-    .main-title {
-        font-size: 32px;
-        font-weight: 700;
-        color: #17365D;
-    }
+.main-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #17365D;
+}
 
-    .subtitle {
-        color: #64748b;
-        font-size: 15px;
-    }
+.subtitle {
+    color: #64748b;
+    font-size: 15px;
+}
 
-    .metric-card {
-        background-color: white;
-        padding: 20px;
-        border-radius: 12px;
-        border: 1px solid #dce4ef;
-    }
+div[data-testid="stMetric"] {
+    background-color: white;
+    padding: 16px;
+    border-radius: 12px;
+    border: 1px solid #dce4ef;
+}
 
-    .stButton button {
-        background-color: #17365D;
-        color: white;
-        border-radius: 8px;
-    }
+.stButton button {
+    border-radius: 8px;
+    font-weight: 600;
+}
 </style>
 """, unsafe_allow_html=True)
 
 
-# ==========================================
+# ==========================================================
+# SESSION STATE
+# ==========================================================
+
+DEFAULTS = {
+    "uploaded_contracts": [],
+    "last_upload": None,
+    "analysis": None,
+    "contract_text": "",
+    "contract_filename": "",
+    "copy_message": ""
+}
+
+for key, value in DEFAULTS.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
+
+
+# ==========================================================
 # API FUNCTIONS
-# ==========================================
+# ==========================================================
 
 def check_api():
     try:
@@ -74,7 +110,6 @@ def check_api():
 
 
 def upload_contract(uploaded_file):
-
     files = {
         "file": (
             uploaded_file.name,
@@ -90,24 +125,20 @@ def upload_contract(uploaded_file):
     )
 
     response.raise_for_status()
-
     return response.json()
 
 
 def get_task_status(task_id):
-
     response = requests.get(
         f"{API_URL}/task/{task_id}",
         timeout=15
     )
 
     response.raise_for_status()
-
     return response.json()
 
 
 def search_contracts(query, top_k):
-
     response = requests.get(
         f"{API_URL}/search",
         params={
@@ -118,46 +149,427 @@ def search_contracts(query, top_k):
     )
 
     response.raise_for_status()
-
     return response.json()
 
 
 def get_metadata(contract_id):
-
     response = requests.get(
         f"{API_URL}/metadata/{contract_id}",
         timeout=15
     )
 
     response.raise_for_status()
-
     return response.json()
 
 
-# ==========================================
-# SESSION STATE
-# ==========================================
+# ==========================================================
+# DOCUMENT EXTRACTION
+# ==========================================================
 
-if "uploaded_contracts" not in st.session_state:
-    st.session_state.uploaded_contracts = []
+def extract_pdf_text(file_bytes):
+    pdf = fitz.open(
+        stream=file_bytes,
+        filetype="pdf"
+    )
 
-if "last_upload" not in st.session_state:
-    st.session_state.last_upload = None
+    text_parts = []
+
+    try:
+        for page in pdf:
+            page_text = page.get_text("text").strip()
+
+            # OCR fallback for scanned pages
+            if not page_text:
+                pix = page.get_pixmap(
+                    matrix=fitz.Matrix(2, 2),
+                    alpha=False
+                )
+
+                image = Image.open(
+                    BytesIO(pix.tobytes("png"))
+                )
+
+                page_text = pytesseract.image_to_string(
+                    image
+                ).strip()
+
+            text_parts.append(page_text)
+
+    finally:
+        pdf.close()
+
+    return "\n".join(text_parts)
 
 
-# ==========================================
+def extract_docx_text(file_bytes):
+    document = Document(
+        BytesIO(file_bytes)
+    )
+
+    paragraphs = [
+        paragraph.text
+        for paragraph in document.paragraphs
+        if paragraph.text.strip()
+    ]
+
+    return "\n".join(paragraphs)
+
+
+def extract_contract_text(uploaded_file):
+    file_bytes = uploaded_file.getvalue()
+    extension = Path(uploaded_file.name).suffix.lower()
+
+    if extension == ".pdf":
+        return extract_pdf_text(file_bytes)
+
+    if extension == ".docx":
+        return extract_docx_text(file_bytes)
+
+    raise ValueError(
+        "Only PDF and DOCX files are supported."
+    )
+
+
+# ==========================================================
+# RISK DETECTION RULES
+# ==========================================================
+
+RISK_RULES = {
+    "Automatic renewal": {
+        "weight": 15,
+        "patterns": [
+            r"automatically renew",
+            r"automatic renewal",
+            r"auto-renew",
+            r"renewal term",
+            r"renew automatically"
+        ]
+    },
+
+    "Confidentiality obligations": {
+        "weight": 8,
+        "patterns": [
+            r"confidential information",
+            r"confidentiality obligations",
+            r"non-disclosure",
+            r"keep.*confidential",
+            r"disclose.*confidential"
+        ]
+    },
+
+    "Payment penalties": {
+        "weight": 15,
+        "patterns": [
+            r"late fee",
+            r"late payment penalty",
+            r"overdue amounts",
+            r"interest on overdue",
+            r"penalty for late payment"
+        ]
+    },
+
+    "Broad indemnification": {
+        "weight": 20,
+        "patterns": [
+            r"indemnify and hold harmless",
+            r"defend.*indemnify",
+            r"indemnification obligations"
+        ]
+    },
+
+    "Unlimited liability": {
+        "weight": 25,
+        "patterns": [
+            r"unlimited liability",
+            r"without limitation.*liability",
+            r"no limitation of liability"
+        ]
+    },
+
+    "Unilateral termination": {
+        "weight": 15,
+        "patterns": [
+            r"terminate.*at its sole discretion",
+            r"terminate.*without cause",
+            r"unilateral termination"
+        ]
+    },
+
+    "Intellectual property ownership": {
+        "weight": 10,
+        "patterns": [
+            r"intellectual property rights",
+            r"ownership of intellectual property",
+            r"assign.*intellectual property",
+            r"work made for hire"
+        ]
+    },
+
+    "Non-compete obligations": {
+        "weight": 12,
+        "patterns": [
+            r"non-compete",
+            r"noncompetition",
+            r"restrict.*competing",
+            r"not engage in.*competing"
+        ]
+    },
+
+    "Data protection obligations": {
+        "weight": 8,
+        "patterns": [
+            r"personal data",
+            r"data protection",
+            r"security breach",
+            r"data processing agreement"
+        ]
+    }
+}
+
+
+# ==========================================================
+# IMPORTANT CLAUSE RULES
+# ==========================================================
+
+CLAUSE_RULES = {
+    "Termination": [
+        r"termination",
+        r"terminate this agreement",
+        r"right to terminate"
+    ],
+
+    "Payment Obligations": [
+        r"payment terms",
+        r"shall pay",
+        r"payment obligations",
+        r"invoice"
+    ],
+
+    "Confidentiality": [
+        r"confidential information",
+        r"confidentiality",
+        r"non-disclosure"
+    ],
+
+    "Intellectual Property": [
+        r"intellectual property",
+        r"ownership of work",
+        r"license rights"
+    ],
+
+    "Governing Law": [
+        r"governing law",
+        r"governed by the laws",
+        r"jurisdiction"
+    ],
+
+    "Indemnification": [
+        r"indemnification",
+        r"indemnify",
+        r"hold harmless"
+    ],
+
+    "Limitation of Liability": [
+        r"limitation of liability",
+        r"liability cap",
+        r"maximum liability"
+    ],
+
+    "Automatic Renewal": [
+        r"automatic renewal",
+        r"automatically renew",
+        r"renewal term"
+    ]
+}
+
+
+# ==========================================================
+# EVIDENCE EXTRACTION
+# ==========================================================
+
+def find_evidence(text, patterns, max_matches=3):
+    sentences = re.split(
+        r"(?<=[.!?])\s+|\n+",
+        text
+    )
+
+    matches = []
+
+    for sentence in sentences:
+        sentence = sentence.strip()
+
+        if not sentence:
+            continue
+
+        for pattern in patterns:
+            if re.search(
+                pattern,
+                sentence,
+                flags=re.IGNORECASE
+            ):
+                if sentence not in matches:
+                    matches.append(sentence)
+                break
+
+        if len(matches) >= max_matches:
+            break
+
+    return matches
+
+
+# ==========================================================
+# CONTRACT RISK SCORING
+# ==========================================================
+
+def analyze_contract(text):
+    risk_flags = []
+    total_score = 0
+
+    for category, rule in RISK_RULES.items():
+
+        evidence = find_evidence(
+            text,
+            rule["patterns"]
+        )
+
+        if evidence:
+            total_score += rule["weight"]
+
+            risk_flags.append({
+                "category": category,
+                "weight": rule["weight"],
+                "evidence": evidence
+            })
+
+    score = min(total_score, 100)
+
+    if score <= 30:
+        risk_level = "Low"
+    elif score <= 60:
+        risk_level = "Medium"
+    else:
+        risk_level = "High"
+
+    important_clauses = {}
+
+    for clause, patterns in CLAUSE_RULES.items():
+        matches = find_evidence(
+            text,
+            patterns,
+            max_matches=5
+        )
+
+        if matches:
+            important_clauses[clause] = matches
+
+    return {
+        "risk_score": score,
+        "risk_level": risk_level,
+        "words_analyzed": len(text.split()),
+        "risk_flags": risk_flags,
+        "important_clauses": important_clauses,
+        "scoring_method": "Rule-based keyword screening"
+    }
+
+
+# ==========================================================
+# DISPLAY CONTRACT IDS
+# ==========================================================
+
+def display_upload_details():
+
+    last = st.session_state.last_upload
+
+    if not last:
+        return
+
+    st.markdown("---")
+    st.subheader("Uploaded Contract Details")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.text_input(
+            "Contract ID",
+            value=last["contract_id"],
+            disabled=True,
+            key="display_contract_id"
+        )
+
+    with col2:
+        st.text_input(
+            "Task ID",
+            value=last["task_id"],
+            disabled=True,
+            key="display_task_id"
+        )
+
+    st.caption(
+        f"Filename: {last['filename']}"
+    )
+
+    st.download_button(
+        "Download Contract IDs",
+        data=json.dumps({
+            "filename": last["filename"],
+            "contract_id": last["contract_id"],
+            "task_id": last["task_id"],
+            "status": last.get("status", "queued")
+        }, indent=4),
+        file_name="contract_ids.json",
+        mime="application/json"
+    )
+
+    st.markdown("### Processing Status")
+
+    if st.button(
+        "Check Processing Status",
+        key="check_last_task"
+    ):
+
+        try:
+            result = get_task_status(
+                last["task_id"]
+            )
+
+            last["status"] = result.get(
+                "status",
+                "unknown"
+            )
+
+            if last["status"] == "completed":
+                st.success("Contract processing completed!")
+
+                st.json(
+                    result.get("result", result)
+                )
+
+            elif last["status"] == "failed":
+                st.error(
+                    result.get("error", "Processing failed.")
+                )
+
+            else:
+                st.info(
+                    f"Current status: {last['status']}"
+                )
+
+        except requests.RequestException as error:
+            st.error(str(error))
+
+
+# ==========================================================
 # SIDEBAR
-# ==========================================
+# ==========================================================
 
 st.sidebar.title("📑 CUAD Intelligence")
-
 st.sidebar.markdown("---")
 
 page = st.sidebar.radio(
     "Navigation",
     [
         "Dashboard",
-        "Upload Contract",
+        "Upload & Risk Analysis",
         "Semantic Search",
         "Contract Metadata",
         "API Status",
@@ -172,26 +584,30 @@ if check_api():
 else:
     st.sidebar.error("API Disconnected")
 
-st.sidebar.caption("CUAD Legal Contract Intelligence System")
+st.sidebar.caption(
+    "CUAD Legal Contract Intelligence System"
+)
 
 
-# ==========================================
+# ==========================================================
 # DASHBOARD
-# ==========================================
+# ==========================================================
 
 if page == "Dashboard":
 
     st.markdown(
-        '<div class="main-title">Contract Intelligence Dashboard</div>',
+        '<div class="main-title">'
+        'Contract Intelligence Dashboard'
+        '</div>',
         unsafe_allow_html=True
     )
 
     st.markdown(
-        '<div class="subtitle">AI-powered legal contract analysis and retrieval</div>',
+        '<div class="subtitle">'
+        'AI-powered legal contract analysis and retrieval'
+        '</div>',
         unsafe_allow_html=True
     )
-
-    st.write("")
 
     col1, col2, col3 = st.columns(3)
 
@@ -209,69 +625,63 @@ if page == "Dashboard":
 
     with col3:
         st.metric(
-            "Available Features",
-            "4"
+            "Words Analyzed",
+            (
+                st.session_state.analysis["words_analyzed"]
+                if st.session_state.analysis
+                else 0
+            )
         )
 
     st.markdown("---")
-
     st.subheader("System Features")
 
-    feature1, feature2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-    with feature1:
-        st.info(
-            "**Contract Upload**\n\n"
-            "Upload PDF and DOCX legal contracts."
-        )
+    with col1:
+        st.info("**Contract Upload**\n\nUpload PDF and DOCX files.")
+        st.info("**Risk Scoring**\n\nIdentify potential contract risks.")
+        st.info("**Semantic Search**\n\nSearch contract passages.")
 
-        st.info(
-            "**Semantic Search**\n\n"
-            "Search contract passages using natural language."
-        )
-
-    with feature2:
-        st.info(
-            "**Metadata Extraction**\n\n"
-            "View uploaded contract information."
-        )
-
-        st.info(
-            "**Processing Status**\n\n"
-            "Monitor contract processing tasks."
-        )
+    with col2:
+        st.info("**Clause Identification**\n\nIdentify important clauses.")
+        st.info("**Metadata Extraction**\n\nRetrieve contract information.")
+        st.info("**Task Monitoring**\n\nTrack processing status.")
 
     st.markdown("---")
-
-    st.subheader("Recent Uploads")
+    st.subheader("Uploaded Contract History")
 
     if st.session_state.uploaded_contracts:
-
         st.dataframe(
             st.session_state.uploaded_contracts,
-            use_container_width=True
+            use_container_width=True,
+            hide_index=True
         )
-
     else:
-        st.info("No contracts uploaded during this session.")
+        st.info("No contracts uploaded yet.")
+
+    display_upload_details()
 
 
-# ==========================================
-# UPLOAD CONTRACT
-# ==========================================
+# ==========================================================
+# UPLOAD AND RISK ANALYSIS
+# ==========================================================
 
-elif page == "Upload Contract":
+elif page == "Upload & Risk Analysis":
 
-    st.title("📤 Upload Legal Contract")
+    st.title(
+        "📑 AI-Powered Contract Intelligence & Risk Scoring"
+    )
 
     st.write(
-        "Upload a PDF or DOCX contract for text extraction, "
-        "chunking and semantic indexing."
+        "Upload a contract to extract text, identify risks "
+        "and analyze important clauses."
     )
 
     uploaded_file = st.file_uploader(
-        "Choose a contract",
-        type=["pdf", "docx"]
+        "Upload a PDF or DOCX contract",
+        type=["pdf", "docx"],
+        key="contract_uploader"
     )
 
     if uploaded_file:
@@ -285,157 +695,204 @@ elif page == "Upload Contract":
         )
 
         if st.button(
-            "Upload and Process Contract",
+            "Analyze Contract",
+            type="primary",
             use_container_width=True
         ):
 
             try:
+                with st.spinner(
+                    "Extracting and analyzing contract..."
+                ):
 
-                with st.spinner("Uploading contract..."):
+                    contract_text = extract_contract_text(
+                        uploaded_file
+                    )
 
-                    result = upload_contract(uploaded_file)
+                    if not contract_text.strip():
+                        raise ValueError(
+                            "No text found in the uploaded document."
+                        )
 
-                task_id = result["task_id"]
-                contract_id = result["contract_id"]
+                    analysis = analyze_contract(
+                        contract_text
+                    )
 
-                st.session_state.last_upload = {
-                    "task_id": task_id,
-                    "contract_id": contract_id,
-                    "filename": uploaded_file.name
+                st.session_state.contract_text = contract_text
+                st.session_state.contract_filename = uploaded_file.name
+                st.session_state.analysis = analysis
+
+                st.success("Contract analysis completed!")
+
+            except Exception as error:
+                st.error(
+                    f"Analysis failed: {error}"
+                )
+
+    # Risk results
+    if st.session_state.analysis:
+
+        analysis = st.session_state.analysis
+
+        st.markdown("---")
+        st.subheader("Contract Risk Assessment")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "Risk Score",
+                f'{analysis["risk_score"]}/100'
+            )
+
+        with col2:
+            st.metric(
+                "Risk Level",
+                analysis["risk_level"]
+            )
+
+        with col3:
+            st.metric(
+                "Words Analyzed",
+                analysis["words_analyzed"]
+            )
+
+        st.progress(
+            analysis["risk_score"] / 100,
+            text=f'Risk Score: {analysis["risk_score"]}/100'
+        )
+
+        st.markdown("---")
+        st.subheader("Potential Risk Flags")
+
+        if analysis["risk_flags"]:
+
+            for flag in analysis["risk_flags"]:
+
+                with st.expander(
+                    f'{flag["category"]} '
+                    f'({flag["weight"]} points)',
+                    expanded=True
+                ):
+
+                    for evidence in flag["evidence"]:
+                        st.warning(
+                            f'Evidence: "{evidence}"'
+                        )
+
+        else:
+            st.success(
+                "No configured risk patterns detected."
+            )
+
+        st.markdown("---")
+        st.subheader("Important Clauses")
+
+        if analysis["important_clauses"]:
+
+            for clause, matches in (
+                analysis["important_clauses"].items()
+            ):
+
+                with st.expander(
+                    f"{clause} ({len(matches)} matches)"
+                ):
+
+                    for match in matches:
+                        st.write(f"• {match}")
+
+        else:
+            st.info(
+                "No configured clause patterns detected."
+            )
+
+        st.markdown("---")
+        st.subheader("Extracted Contract Text")
+
+        with st.expander("View extracted text"):
+            st.text_area(
+                "Contract Text",
+                value=st.session_state.contract_text,
+                height=300
+            )
+
+        report = {
+            "filename": st.session_state.contract_filename,
+            "analysis": analysis,
+            "contract_text": st.session_state.contract_text
+        }
+
+        st.download_button(
+            "Download Contract Analysis JSON",
+            data=json.dumps(report, indent=4),
+            file_name="contract_analysis.json",
+            mime="application/json",
+            use_container_width=True
+        )
+
+        st.caption(
+            "Risk scores are rule-based screening indicators, "
+            "not definitive legal assessments."
+        )
+
+    # Backend upload
+    st.markdown("---")
+    st.subheader("Upload Contract to FastAPI")
+
+    if uploaded_file:
+
+        if st.button(
+            "Upload to Backend",
+            use_container_width=True
+        ):
+
+            try:
+                with st.spinner("Uploading contract to FastAPI..."):
+
+                    result = upload_contract(
+                        uploaded_file
+                    )
+
+                last = {
+                    "filename": uploaded_file.name,
+                    "contract_id": result["contract_id"],
+                    "task_id": result["task_id"],
+                    "status": result.get("status", "queued")
                 }
+
+                st.session_state.last_upload = last
 
                 st.session_state.uploaded_contracts.append({
                     "Filename": uploaded_file.name,
-                    "Contract ID": contract_id,
-                    "Task ID": task_id,
-                    "Status": "Queued"
+                    "Contract ID": last["contract_id"],
+                    "Task ID": last["task_id"],
+                    "Status": last["status"]
                 })
 
-                st.success("Contract uploaded successfully!")
-
-                st.write("**Task ID**")
-
-                st.code(task_id)
-
-                st.write("**Contract ID**")
-
-                st.code(contract_id)
-
-            except requests.RequestException as error:
-
-                st.error(f"Upload failed: {error}")
-
-    st.markdown("---")
-
-    st.subheader("Processing Status")
-
-    task_id_input = st.text_input(
-        "Enter Task ID",
-        placeholder="Paste your task ID here"
-    )
-
-    if st.button("Check Processing Status"):
-
-        if not task_id_input.strip():
-
-            st.warning("Please enter a task ID.")
-
-        else:
-
-            try:
-
-                result = get_task_status(
-                    task_id_input.strip()
+                st.success(
+                    "Contract uploaded successfully!"
                 )
 
-                status = result.get("status", "unknown")
-
-                if status == "completed":
-                    st.success("Contract processing completed!")
-
-                elif status == "failed":
-                    st.error("Contract processing failed.")
-
-                else:
-                    st.info(f"Current status: {status}")
-
-                st.json(result)
-
             except requests.RequestException as error:
+                st.error(
+                    f"Backend upload failed: {error}"
+                )
 
-                st.error(f"Unable to retrieve task: {error}")
+            except KeyError as error:
+                st.error(
+                    f"API response did not contain expected field: {error}"
+                )
 
-    if st.button("Wait for Last Upload to Finish"):
-
-        last_upload = st.session_state.last_upload
-
-        if not last_upload:
-
-            st.warning("Upload a contract first.")
-
-        else:
-
-            task_id = last_upload["task_id"]
-            progress = st.progress(0)
-            status_text = st.empty()
-
-            try:
-
-                for attempt in range(150):
-
-                    result = get_task_status(task_id)
-
-                    status = result.get("status", "unknown")
-
-                    status_text.write(
-                        f"Processing status: {status}"
-                    )
-
-                    progress.progress(
-                        min((attempt + 1) / 150, 1.0)
-                    )
-
-                    if status == "completed":
-
-                        st.success(
-                            "Contract processing completed!"
-                        )
-
-                        st.json(result.get("result", result))
-                        break
-
-                    if status == "failed":
-
-                        st.error(
-                            result.get("error", "Processing failed.")
-                        )
-                        break
-
-                    time.sleep(2)
-
-                else:
-
-                    st.warning(
-                        "Processing is taking longer than expected. "
-                        "Check the task status again."
-                    )
-
-            except requests.RequestException as error:
-
-                st.error(f"Status check failed: {error}")
+    display_upload_details()
 
 
-# ==========================================
+# ==========================================================
 # SEMANTIC SEARCH
-# ==========================================
+# ==========================================================
 
 elif page == "Semantic Search":
 
     st.title("🔎 Semantic Contract Search")
-
-    st.write(
-        "Search uploaded contract passages using natural language."
-    )
 
     query = st.text_area(
         "Enter your search query",
@@ -451,18 +908,17 @@ elif page == "Semantic Search":
 
     if st.button(
         "Search Contracts",
+        type="primary",
         use_container_width=True
     ):
 
         if not query.strip():
-
-            st.warning("Please enter a search query.")
+            st.warning("Enter a search query.")
 
         else:
 
             try:
-
-                with st.spinner("Searching contract database..."):
+                with st.spinner("Searching contracts..."):
 
                     result = search_contracts(
                         query,
@@ -472,50 +928,45 @@ elif page == "Semantic Search":
                 results = result.get("results", [])
 
                 st.success(
-                    f"Search completed. Results returned: {len(results)}"
+                    f"Search completed: {len(results)} results"
                 )
 
-                if results:
+                for index, item in enumerate(results):
 
-                    for index, item in enumerate(results):
+                    with st.expander(
+                        f"Search Result {index + 1}",
+                        expanded=True
+                    ):
 
-                        with st.expander(
-                            f"Result {index + 1}",
-                            expanded=True
-                        ):
+                        if isinstance(item, dict):
+                            st.json(item)
+                        else:
+                            st.write(item)
 
-                            if isinstance(item, dict):
-
-                                st.json(item)
-
-                            else:
-
-                                st.write(item)
-
-                else:
-
-                    st.info("No matching contract passages found.")
+                if not results:
+                    st.info("No matching passages found.")
 
             except requests.RequestException as error:
+                st.error(
+                    f"Search failed: {error}"
+                )
 
-                st.error(f"Search failed: {error}")
 
-
-# ==========================================
+# ==========================================================
 # CONTRACT METADATA
-# ==========================================
+# ==========================================================
 
 elif page == "Contract Metadata":
 
     st.title("📋 Contract Metadata")
 
-    st.write(
-        "Retrieve information about a previously uploaded contract."
-    )
-
     contract_id = st.text_input(
         "Enter Contract ID",
-        placeholder="Paste contract ID here"
+        value=(
+            st.session_state.last_upload["contract_id"]
+            if st.session_state.last_upload
+            else ""
+        )
     )
 
     if st.button(
@@ -524,43 +975,35 @@ elif page == "Contract Metadata":
     ):
 
         if not contract_id.strip():
-
-            st.warning("Please enter a contract ID.")
+            st.warning("Enter a Contract ID.")
 
         else:
 
             try:
-
-                with st.spinner("Retrieving metadata..."):
-
-                    metadata = get_metadata(
-                        contract_id.strip()
-                    )
+                metadata = get_metadata(
+                    contract_id.strip()
+                )
 
                 st.success("Metadata retrieved successfully!")
-
-                st.subheader("Contract Information")
 
                 st.json(metadata)
 
                 st.download_button(
                     "Download Metadata JSON",
-                    data=__import__("json").dumps(
-                        metadata,
-                        indent=4
-                    ),
-                    file_name=f"{contract_id}.json",
+                    data=json.dumps(metadata, indent=4),
+                    file_name="contract_metadata.json",
                     mime="application/json"
                 )
 
             except requests.RequestException as error:
+                st.error(
+                    f"Metadata retrieval failed: {error}"
+                )
 
-                st.error(f"Metadata retrieval failed: {error}")
 
-
-# ==========================================
+# ==========================================================
 # API STATUS
-# ==========================================
+# ==========================================================
 
 elif page == "API Status":
 
@@ -568,10 +1011,9 @@ elif page == "API Status":
 
     if check_api():
 
-        st.success("CUAD FastAPI server is running.")
+        st.success("FastAPI server is running.")
 
         try:
-
             response = requests.get(
                 f"{API_URL}/",
                 timeout=5
@@ -580,76 +1022,79 @@ elif page == "API Status":
             st.json(response.json())
 
         except requests.RequestException as error:
-
             st.error(str(error))
 
     else:
 
-        st.error("FastAPI server is not reachable.")
+        st.error(
+            "FastAPI server is not reachable."
+        )
 
         st.code(
             "python -m uvicorn src.api.main:app --reload"
         )
 
-    st.markdown("---")
-
     st.write("API Base URL")
-
     st.code(API_URL)
 
-    st.write("Swagger Documentation")
-
     st.markdown(
-        f"[Open API Documentation]({API_URL}/docs)"
+        f"[Open Swagger API Documentation]({API_URL}/docs)"
     )
 
 
-# ==========================================
+# ==========================================================
 # ABOUT PROJECT
-# ==========================================
+# ==========================================================
 
 elif page == "About Project":
 
     st.title("About CUAD Contract Intelligence")
 
     st.markdown("""
-    ### Project Overview
+    ## Project Overview
 
-    CUAD Contract Intelligence is an AI-powered legal contract
-    analysis and retrieval system.
+    CUAD Contract Intelligence is an NLP-assisted legal
+    contract analysis and information retrieval system.
 
-    ### Technologies Used
+    ## Technologies Used
 
     - Python
-    - FastAPI
-    - Streamlit
     - DistilBERT
+    - PyTorch
+    - spaCy
     - Sentence Transformers
     - ChromaDB
-    - PyMuPDF / PyPDF
-    - OCR tools (Tesseract)
+    - FastAPI
+    - Streamlit
+    - PyMuPDF
+    - Tesseract OCR
 
-    ### Main Modules
+    ## Main Modules
 
     1. Contract upload
-    2. PDF and DOCX text extraction
-    3. Document chunking
-    4. Text embeddings
-    5. Vector database storage
+    2. PDF and DOCX extraction
+    3. Scanned PDF OCR
+    4. Contract risk screening
+    5. Important clause identification
     6. Semantic search
-    7. Contract metadata retrieval
+    7. Metadata retrieval
+    8. Processing task tracking
 
-    ### Model Information
+    ## Dataset
 
-    Trained model: DistilBERT
-
-    Dataset: CUAD (Contract Understanding Atticus Dataset)
+    Contract Understanding Atticus Dataset (CUAD)
 
     Number of contracts: 510
+
+    ## Disclaimer
+
+    Automated risk flags and scores are intended for
+    preliminary screening and must be reviewed by
+    qualified legal professionals.
     """)
-    
+
     st.markdown("---")
 
     st.caption(
-        "CUAD Contract Intelligence System | Week 4 Development"
+        "CUAD Legal Contract Intelligence System | Week 4"
     )
